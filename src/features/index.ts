@@ -40,7 +40,7 @@ export {
 // Courses
 export * from "./courses/types";
 export * from "./courses/api";
-export { useCourses, useCourse, useFeaturedCourses, useCourseCategories } from "./courses/hooks/useCourses";
+export { useCourses, useCourse, useFeaturedCourses, useCategories as useCourseCategories } from "./courses/hooks/useCourses";
 
 // Exams (Annales)
 export * from "./exams/types";
