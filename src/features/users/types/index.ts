@@ -55,6 +55,8 @@ export type EnrollmentsResponse = PaginatedResponse<Enrollment>;
 
 // Extended user profile
 export interface UserProfile extends User {
+  bio?: string;
+  avatar?: string; // Backwards compat alias for avatarKey URL
   enrollments?: Enrollment[];
   stats?: UserStats;
   location?: string;

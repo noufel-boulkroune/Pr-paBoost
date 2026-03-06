@@ -45,7 +45,7 @@ export function Navbar() {
 
   const filteredNavLinks = navLinks.filter((link) => {
     if (link.requiresAuth && !isAuthenticated) return false;
-    if (link.roles && !link.roles.some((role) => hasRole(role))) return false;
+    if (link.roles && !link.roles.some((role) => { const r = role === "student" ? "STUDENT" : role === "instructor" ? "SUB_ADMIN" : "SUPER_ADMIN"; return user?.role === r; })) return false;
     return true;
   });
 
@@ -82,7 +82,7 @@ export function Navbar() {
             </svg>
           </div>
           <span className="text-heading-md font-bold text-text-primary hidden sm:block">
-            Course<span className="gradient-text">Stack</span>
+            Prep<span className="text-primary-600">Med</span>
           </span>
         </Link>
 
@@ -136,7 +136,7 @@ export function Navbar() {
             <div className="flex items-center gap-2">
               <Link href="/dashboard/dashboard">
                 <Avatar
-                  src={user.avatar}
+                  src={user.avatarKey ? (process.env.NEXT_PUBLIC_S3_BASE_URL + "/" + user.avatarKey) : undefined}
                   name={`${user.firstName} ${user.lastName}`}
                   size="md"
                   className="cursor-pointer hover:ring-2 hover:ring-primary-500 hover:ring-offset-2 transition-all duration-fast"
@@ -145,7 +145,7 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={logout}
+                onClick={() => void logout()}
                 className="hidden sm:flex"
               >
                 Logout

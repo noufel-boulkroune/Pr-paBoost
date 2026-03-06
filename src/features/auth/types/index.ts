@@ -1,76 +1,83 @@
+/**
+ * @file features/auth/types/index.ts
+ * @description Auth-related TypeScript types aligned with the NestJS backend.
+ */
+
 import { BaseEntity } from "@/types";
 
+// ─── Role ─────────────────────────────────────────────────────────────────────
+
 /**
- * User Roles matching NestJS backend
- * SUPER_ADMIN: Full system access
- * SUB_ADMIN: Teacher/Instructor role
- * STUDENT: Student role
+ * User roles matching the NestJS backend.
+ *  SUPER_ADMIN — Full platform control (categories, users, subscriptions)
+ *  SUB_ADMIN   — Teacher / instructor role
+ *  STUDENT     — Learner role (content access gated by subscription)
  */
 export type UserRole = "SUPER_ADMIN" | "SUB_ADMIN" | "STUDENT";
 
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+/** Full user object returned by GET /auth/me and POST /auth/login */
 export interface User extends BaseEntity {
   email: string;
   firstName: string;
   lastName: string;
-  avatar?: string;
+  /** S3 key (not URL) — pass through getS3Url() before rendering */
+  avatarKey: string | null;
   role: UserRole;
-  isEmailVerified: boolean;
-  lastLoginAt?: string;
-  bio?: string; // Backwards compatibility
+  isActive: boolean;
 }
 
-/**
- * JWT tokens from NestJS backend
- * Access token: 15 min expiry
- * Refresh token: Long-lived
- */
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
+// ─── Auth payloads ────────────────────────────────────────────────────────────
 
+/** POST /auth/login request body */
 export interface LoginCredentials {
   email: string;
   password: string;
 }
 
+/** POST /auth/register request body */
 export interface RegisterCredentials {
-  email: string;
-  password: string;
   firstName: string;
   lastName: string;
-  confirmPassword?: string; // UI validation only
-  role?: UserRole;
-}
-
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  logout?: () => void; // Backwards compatibility
-  hasRole?: (roles: UserRole[]) => boolean; // Backwards compatibility
-}
-
-export interface PasswordResetRequest {
   email: string;
-}
-
-export interface PasswordResetConfirm {
-  token: string;
-  newPassword: string;
-  confirmPassword?: string; // UI validation only
+  password: string;
 }
 
 /**
- * Role helpers
+ * The inner `data` object returned by POST /auth/login and POST /auth/register.
+ * The ApiResponse envelope is stripped by the axios interceptor.
  */
+export interface LoginData {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
+/**
+ * The inner `data` object returned by POST /auth/refresh.
+ */
+export interface RefreshData {
+  accessToken: string;
+  refreshToken: string;
+}
+
+// ─── Role redirect map ────────────────────────────────────────────────────────
+
+/**
+ * Where to redirect each role after a successful login.
+ * Used by the useAuth hook.
+ */
+export const ROLE_REDIRECT: Record<UserRole, string> = {
+  STUDENT: "/dashboard",
+  SUB_ADMIN: "/admin",
+  SUPER_ADMIN: "/admin",
+};
+
+// ─── Role helpers ─────────────────────────────────────────────────────────────
+
 export const isAdmin = (role?: UserRole): boolean => role === "SUPER_ADMIN";
 export const isTeacher = (role?: UserRole): boolean => role === "SUB_ADMIN";
 export const isStudent = (role?: UserRole): boolean => role === "STUDENT";
-
-/**
- * Check if user has admin or teacher access
- */
-export const isStaff = (role?: UserRole): boolean => 
+export const isStaff = (role?: UserRole): boolean =>
   role === "SUPER_ADMIN" || role === "SUB_ADMIN";

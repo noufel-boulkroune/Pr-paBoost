@@ -117,7 +117,7 @@ export function Sidebar() {
   };
 
   const filterItems = (items: SidebarItem[]) =>
-    items.filter((item) => !item.roles || item.roles.some((role) => hasRole(role)));
+    items.filter((item) => !item.roles || item.roles.some((role) => { const r = role === "student" ? "STUDENT" : role === "instructor" ? "SUB_ADMIN" : "SUPER_ADMIN"; return user?.role === r; }));
 
   const allItems = [
     { title: "Student", items: filterItems(studentItems) },
@@ -132,7 +132,7 @@ export function Sidebar() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-primary-50 to-primary-100/50 border border-primary-100">
             <Avatar
-              src={user.avatar}
+              src={user.avatarKey ? (process.env.NEXT_PUBLIC_S3_BASE_URL + "/" + user.avatarKey) : undefined}
               name={`${user.firstName} ${user.lastName}`}
               size="md"
               className="ring-2 ring-primary-300 ring-offset-1"
