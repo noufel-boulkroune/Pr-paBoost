@@ -79,7 +79,7 @@ export const coursesApi = {
    * PUT /api/v1/courses/:id
    */
   updateCourse: (id: string, data: UpdateCourseInput): Promise<Course> =>
-    api.put(`${COURSES_BASE}/${id}`, data),
+    api.patch(`${COURSES_BASE}/${id}`, data),
 
   /**
    * Delete course

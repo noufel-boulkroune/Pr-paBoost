@@ -23,25 +23,10 @@ function matchesPattern(path: string, patterns: string[]): boolean {
   });
 }
 
-/**
- * Get access token from request cookies
- */
-function getTokenFromRequest(request: NextRequest): string | null {
-  return request.cookies.get("accessToken")?.value || null;
-}
-
-/**
- * Get user role from request cookies
- */
-function getUserRoleFromRequest(request: NextRequest): string | null {
-  return request.cookies.get("userRole")?.value || null;
-}
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = getTokenFromRequest(request);
-  const userRole = getUserRoleFromRequest(request);
-  const isAuthenticated = !!token;
+  const isAuthenticated = request.cookies.get("isAuthenticated")?.value === "true";
+  const userRole = request.cookies.get("userRole")?.value || null;
 
   // Allow public routes
   if (matchesPattern(pathname, PUBLIC_ROUTES)) {
@@ -68,9 +53,9 @@ export function middleware(request: NextRequest) {
       }
     }
 
-    // Check admin routes (SUPER_ADMIN role in NestJS)
+    // Check admin routes (SUPER_ADMIN and SUB_ADMIN)
     if (matchesPattern(pathname, ADMIN_ROUTES)) {
-      if (userRole !== "SUPER_ADMIN") {
+      if (userRole !== "SUPER_ADMIN" && userRole !== "SUB_ADMIN") {
         return NextResponse.redirect(new URL("/dashboard/dashboard", request.url));
       }
     }

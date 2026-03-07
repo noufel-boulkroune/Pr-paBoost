@@ -1,64 +1,81 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useInstructorStats } from "@/features/users/hooks/useUser";
-import { ListSkeleton, StatsCardSkeleton } from "@/components/ui/Skeleton";
-
-// Mock data for instructor courses
-const mockCourses = [
-  {
-    id: "1",
-    title: "Complete React Developer Course",
-    students: 1234,
-    rating: 4.8,
-    revenue: 45600,
-    status: "published",
-    lastUpdated: "2024-01-15",
-  },
-  {
-    id: "2",
-    title: "Advanced TypeScript Patterns",
-    students: 567,
-    rating: 4.9,
-    revenue: 18900,
-    status: "published",
-    lastUpdated: "2024-01-10",
-  },
-  {
-    id: "3",
-    title: "Next.js 14 Masterclass",
-    students: 0,
-    rating: 0,
-    revenue: 0,
-    status: "draft",
-    lastUpdated: "2024-01-20",
-  },
-];
+import { StatsCardSkeleton } from "@/components/ui/Skeleton";
+import { coursesApi } from "@/features/courses/api";
+import type { Course } from "@/features/courses/types";
 
 export default function InstructorCoursesPage() {
   const { stats, isLoading: statsLoading } = useInstructorStats();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const loadCourses = useCallback(() => {
+    setCoursesLoading(true);
+    coursesApi.getCourses({ all: "true" } as never)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res as { data?: Course[] }).data ?? [];
+        setCourses(list);
+      })
+      .catch(() => toast.error("Impossible de charger les cours"))
+      .finally(() => setCoursesLoading(false));
+  }, []);
+
+  useEffect(() => { loadCourses(); }, [loadCourses]);
+
+  const handleDelete = async (course: Course) => {
+    if (!window.confirm(`Supprimer le cours "${course.title}" ?`)) return;
+    setDeletingId(course.id);
+    try {
+      await coursesApi.deleteCourse(course.id);
+      setCourses((prev) => prev.filter((c) => c.id !== course.id));
+      toast.success("Cours supprimé");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de la suppression");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleTogglePublish = async (course: Course) => {
+    setTogglingId(course.id);
+    try {
+      const updated = await coursesApi.updateCourse(course.id, { isPublished: !course.isPublished });
+      setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, isPublished: updated.isPublished } : c)));
+      toast.success(updated.isPublished ? "Cours publié" : "Cours mis en brouillon");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de la mise à jour");
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   const statCards = [
-    { label: "Total Courses", value: stats?.totalCourses || 0, icon: "📚" },
-    { label: "Total Students", value: stats?.totalStudents || 0, icon: "👥" },
-    { label: "Total Revenue", value: `$${stats?.totalRevenue || 0}`, icon: "💰" },
-    { label: "Avg Rating", value: stats?.averageRating || 0, icon: "⭐" },
+    { label: "Total Cours", value: stats?.totalCourses ?? courses.length, icon: "📚" },
+    { label: "Étudiants", value: stats?.totalStudents ?? 0, icon: "👥" },
+    { label: "Revenus", value: `${stats?.totalRevenue ?? 0} DA`, icon: "💰" },
+    { label: "Note moy.", value: stats?.averageRating ?? 0, icon: "⭐" },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-display-md font-bold text-text-primary">My Courses</h1>
+          <h1 className="text-display-md font-bold text-text-primary">Mes Cours</h1>
           <p className="text-body-md text-text-secondary mt-1">
-            Manage your courses and track their performance
+            Gérez vos cours et suivez leur performance
           </p>
         </div>
         <Link href="/dashboard/instructor/create-course">
-          <Button leftIcon={<span>+</span>}>Create New Course</Button>
+          <Button leftIcon={<span>+</span>}>Créer un cours</Button>
         </Link>
       </div>
 
@@ -74,12 +91,8 @@ export default function InstructorCoursesPage() {
                   {stat.icon}
                 </div>
                 <div>
-                  <p className="text-caption text-text-muted uppercase tracking-wide">
-                    {stat.label}
-                  </p>
-                  <p className="text-display-sm font-bold text-text-primary">
-                    {stat.value}
-                  </p>
+                  <p className="text-caption text-text-muted uppercase tracking-wide">{stat.label}</p>
+                  <p className="text-display-sm font-bold text-text-primary">{stat.value}</p>
                 </div>
               </CardContent>
             </Card>
@@ -89,51 +102,71 @@ export default function InstructorCoursesPage() {
 
       {/* Courses List */}
       <div className="space-y-4">
-        <h2 className="text-heading-xl font-semibold text-text-primary">Your Courses</h2>
-        
-        {mockCourses.map((course) => (
-          <Card key={course.id} isHoverable>
-            <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="w-full sm:w-40 h-24 rounded-lg bg-surface-2 flex-shrink-0 flex items-center justify-center text-3xl">
-                📚
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-heading-md font-semibold text-text-primary">
-                    {course.title}
-                  </h3>
-                  <Badge
-                    variant={course.status === "published" ? "success" : "warning"}
-                    size="sm"
-                  >
-                    {course.status}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-body-sm text-text-secondary">
-                  <span>{course.students.toLocaleString()} students</span>
-                  {course.rating > 0 && (
-                    <span className="flex items-center gap-1">
-                      <svg className="w-4 h-4 text-warning-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                      {course.rating.toFixed(1)}
-                    </span>
-                  )}
-                  <span>Revenue: ${course.revenue.toLocaleString()}</span>
-                  <span>Updated: {course.lastUpdated}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  Edit
-                </Button>
-                <Button variant="ghost" size="sm">
-                  Analytics
-                </Button>
-              </div>
+        <h2 className="text-heading-xl font-semibold text-text-primary">Vos cours</h2>
+
+        {coursesLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-24 rounded-xl bg-surface-2 animate-pulse" />
+            ))}
+          </div>
+        ) : courses.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <p className="text-display-sm mb-2">📚</p>
+              <p className="text-heading-md font-semibold text-text-primary mb-1">
+                Aucun cours pour le moment
+              </p>
+              <p className="text-body-sm text-text-secondary mb-4">
+                Créez votre premier cours pour commencer
+              </p>
+              <Link href="/dashboard/instructor/create-course">
+                <Button>Créer un cours</Button>
+              </Link>
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          courses.map((course) => (
+            <Card key={course.id} isHoverable>
+              <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="w-full sm:w-40 h-24 rounded-lg bg-surface-2 flex-shrink-0 flex items-center justify-center text-3xl">
+                  📚
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-heading-md font-semibold text-text-primary">{course.title}</h3>
+                    <Badge variant={course.isPublished ? "success" : "warning"} size="sm">
+                      {course.isPublished ? "Publié" : "Brouillon"}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-body-sm text-text-secondary">
+                    {course.module && <span>Module : {course.module.name}</span>}
+                    <span>{course.totalLessons ?? 0} leçon(s)</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    isLoading={togglingId === course.id}
+                    onClick={() => handleTogglePublish(course)}
+                  >
+                    {course.isPublished ? "Dépublier" : "Publier"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-error-500"
+                    isLoading={deletingId === course.id}
+                    onClick={() => handleDelete(course)}
+                  >
+                    Supprimer
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );

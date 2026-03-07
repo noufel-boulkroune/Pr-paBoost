@@ -25,6 +25,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 function LoginForm() {
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -39,7 +40,7 @@ function LoginForm() {
   const onSubmit = async (values: LoginValues) => {
     setServerError(null);
     try {
-      await login(values);
+      await login(values, rememberMe);
     } catch (error: unknown) {
       const msg =
         error instanceof Error
@@ -133,7 +134,12 @@ function LoginForm() {
 
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer group">
-            <input type="checkbox" className="w-4 h-4 rounded border-border text-primary-600 focus:ring-primary-500" />
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-border text-primary-600 focus:ring-primary-500"
+            />
             <span className="text-body-sm text-text-secondary group-hover:text-text-primary transition-colors">
               Se souvenir de moi
             </span>

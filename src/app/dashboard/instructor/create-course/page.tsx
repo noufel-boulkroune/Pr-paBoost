@@ -1,113 +1,125 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Tabs, TabList, TabTrigger, TabContent } from "@/components/ui/Tabs";
+import { coursesApi } from "@/features/courses/api";
+import { modulesApi } from "@/features/modules/api";
+import type { Module } from "@/features/modules/types";
 
-const levelOptions = [
-  { value: "beginner", label: "Beginner" },
-  { value: "intermediate", label: "Intermediate" },
-  { value: "advanced", label: "Advanced" },
-  { value: "all-levels", label: "All Levels" },
-];
-
-const categoryOptions = [
-  { value: "development", label: "Development" },
-  { value: "business", label: "Business" },
-  { value: "design", label: "Design" },
-  { value: "marketing", label: "Marketing" },
-];
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function CreateCoursePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
+  const [modules, setModules] = useState<Module[]>([]);
+
+  // Form state
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [moduleId, setModuleId] = useState("");
+
+  useEffect(() => {
+    modulesApi.getModules().then((res) => {
+      const list = Array.isArray(res) ? res : (res as { data?: Module[] }).data ?? [];
+      setModules(list);
+      if (list.length > 0 && !moduleId) setModuleId(list[0].id);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const moduleOptions = modules.map((m) => ({ value: m.id, label: m.name }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) { toast.error("Le titre est requis"); return; }
+    if (!moduleId) { toast.error("Veuillez sélectionner un module"); return; }
+
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    setIsSubmitting(false);
-    router.push("/dashboard/instructor/courses");
+    try {
+      await coursesApi.createCourse({
+        title: title.trim(),
+        slug: slugify(title),
+        description: description.trim(),
+        moduleId,
+      });
+      toast.success("Cours créé avec succès !");
+      router.push("/dashboard/instructor/courses");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur lors de la création";
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-display-md font-bold text-text-primary">Create New Course</h1>
+          <h1 className="text-display-md font-bold text-text-primary">Créer un nouveau cours</h1>
           <p className="text-body-md text-text-secondary mt-1">
-            Fill in the details below to create your course
+            Remplissez les informations ci-dessous pour créer votre cours
           </p>
         </div>
         <Button variant="outline" onClick={() => router.back()}>
-          Cancel
+          Annuler
         </Button>
       </div>
 
       <form onSubmit={handleSubmit}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabList>
-            <TabTrigger value="basic">Basic Info</TabTrigger>
-            <TabTrigger value="details">Details</TabTrigger>
-            <TabTrigger value="curriculum">Curriculum</TabTrigger>
-            <TabTrigger value="pricing">Pricing</TabTrigger>
+            <TabTrigger value="basic">Informations</TabTrigger>
+            <TabTrigger value="details">Détails</TabTrigger>
           </TabList>
 
           <TabContent value="basic">
             <Card>
               <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
+                <CardTitle>Informations de base</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Input
-                  label="Course Title"
-                  placeholder="e.g., Complete React Developer Course"
+                  label="Titre du cours"
+                  placeholder="ex: Anatomie du cœur – Niveau avancé"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   required
                 />
                 <Textarea
-                  label="Short Description"
-                  placeholder="Brief description of your course (150 characters max)"
-                  rows={2}
-                  required
+                  label="Description"
+                  placeholder="Décrivez le contenu et les objectifs du cours"
+                  rows={5}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                 />
-                <Textarea
-                  label="Full Description"
-                  placeholder="Detailed description of what students will learn"
-                  rows={6}
+                <Select
+                  label="Module"
+                  options={moduleOptions.length ? moduleOptions : [{ value: "", label: "Chargement..." }]}
+                  value={moduleId}
+                  onChange={(e) => setModuleId(e.target.value)}
                   required
-                />
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Select
-                    label="Category"
-                    options={categoryOptions}
-                    required
-                  />
-                  <Select
-                    label="Level"
-                    options={levelOptions}
-                    required
-                  />
-                </div>
-                <Input
-                  label="Course Thumbnail"
-                  type="file"
-                  accept="image/*"
-                  helperText="Recommended size: 1280x720 pixels"
                 />
               </CardContent>
             </Card>
             <div className="flex justify-end mt-4">
               <Button type="button" onClick={() => setActiveTab("details")}>
-                Next: Details
+                Suivant : Détails
               </Button>
             </div>
           </TabContent>
@@ -115,131 +127,33 @@ export default function CreateCoursePage() {
           <TabContent value="details">
             <Card>
               <CardHeader>
-                <CardTitle>What Students Will Learn</CardTitle>
+                <CardTitle>Objectifs pédagogiques</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-body-sm font-medium text-text-secondary">
-                    Learning Outcomes
+                    Ce que les étudiants apprendront
                   </label>
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <Input
-                      key={i}
-                      placeholder={`Outcome ${i + 1}`}
-                    />
+                    <Input key={i} placeholder={`Objectif ${i + 1}`} />
                   ))}
                 </div>
                 <div className="space-y-2">
                   <label className="text-body-sm font-medium text-text-secondary">
-                    Requirements
+                    Prérequis
                   </label>
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <Input
-                      key={i}
-                      placeholder={`Requirement ${i + 1}`}
-                    />
+                    <Input key={i} placeholder={`Prérequis ${i + 1}`} />
                   ))}
                 </div>
-                <Input
-                  label="Target Audience"
-                  placeholder="Who is this course for?"
-                />
               </CardContent>
             </Card>
             <div className="flex justify-between mt-4">
               <Button type="button" variant="outline" onClick={() => setActiveTab("basic")}>
-                Previous
-              </Button>
-              <Button type="button" onClick={() => setActiveTab("curriculum")}>
-                Next: Curriculum
-              </Button>
-            </div>
-          </TabContent>
-
-          <TabContent value="curriculum">
-            <Card>
-              <CardHeader>
-                <CardTitle>Course Curriculum</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 border border-border rounded-lg bg-surface-2">
-                    <div className="flex items-center justify-between mb-4">
-                      <Input
-                        placeholder="Section 1: Introduction"
-                        className="max-w-md"
-                      />
-                      <Button variant="ghost" size="sm">Delete Section</Button>
-                    </div>
-                    <div className="space-y-2 pl-4">
-                      <div className="flex items-center gap-2 p-2 bg-surface-1 rounded">
-                        <span className="text-caption text-text-muted">1.1</span>
-                        <Input
-                          placeholder="Lesson title"
-                          className="flex-1"
-                        />
-                        <Input
-                          type="file"
-                          accept="video/*"
-                          className="w-48"
-                        />
-                      </div>
-                      <Button variant="outline" size="sm" className="ml-6">
-                        + Add Lesson
-                      </Button>
-                    </div>
-                  </div>
-                  <Button variant="outline">+ Add Section</Button>
-                </div>
-              </CardContent>
-            </Card>
-            <div className="flex justify-between mt-4">
-              <Button type="button" variant="outline" onClick={() => setActiveTab("details")}>
-                Previous
-              </Button>
-              <Button type="button" onClick={() => setActiveTab("pricing")}>
-                Next: Pricing
-              </Button>
-            </div>
-          </TabContent>
-
-          <TabContent value="pricing">
-            <Card>
-              <CardHeader>
-                <CardTitle>Pricing</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Price"
-                    type="number"
-                    placeholder="99.99"
-                    required
-                  />
-                  <Select
-                    label="Currency"
-                    options={[
-                      { value: "USD", label: "USD - US Dollar" },
-                      { value: "EUR", label: "EUR - Euro" },
-                      { value: "GBP", label: "GBP - British Pound" },
-                    ]}
-                    required
-                  />
-                </div>
-                <Input
-                  label="Compare at Price (Optional)"
-                  type="number"
-                  placeholder="199.99"
-                  helperText="Original price to show discount"
-                />
-              </CardContent>
-            </Card>
-            <div className="flex justify-between mt-4">
-              <Button type="button" variant="outline" onClick={() => setActiveTab("curriculum")}>
-                Previous
+                Précédent
               </Button>
               <Button type="submit" isLoading={isSubmitting}>
-                Create Course
+                Créer le cours
               </Button>
             </div>
           </TabContent>

@@ -69,9 +69,9 @@ export interface RefreshData {
  * Used by the useAuth hook.
  */
 export const ROLE_REDIRECT: Record<UserRole, string> = {
-  STUDENT: "/dashboard",
-  SUB_ADMIN: "/admin",
-  SUPER_ADMIN: "/admin",
+  STUDENT: "/dashboard/dashboard",
+  SUB_ADMIN: "/dashboard/admin/courses",
+  SUPER_ADMIN: "/dashboard/admin/courses",
 };
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────

@@ -20,6 +20,31 @@ import { User, UserRole } from "@/features/auth/types";
 /** localStorage key for the long-lived refresh token */
 export const REFRESH_TOKEN_KEY = "prep_refresh_token";
 
+/** Read refresh token from whichever storage it was saved to */
+export const getRefreshToken = (): string | null => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY);
+};
+
+/** Save refresh token — localStorage when rememberMe, sessionStorage otherwise */
+export const storeRefreshToken = (token: string, rememberMe: boolean): void => {
+  if (typeof window === "undefined") return;
+  if (rememberMe) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+};
+
+/** Remove refresh token from both storages */
+export const clearRefreshToken = (): void => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
 // ─── State shape ─────────────────────────────────────────────────────────────
 
 interface AuthState {
@@ -40,9 +65,9 @@ interface AuthState {
 
   /**
    * Store auth state after a successful login / register / token refresh.
-   * Saves refreshToken to localStorage; keeps accessToken in memory only.
+   * Saves refreshToken to localStorage (rememberMe=true) or sessionStorage (rememberMe=false).
    */
-  setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  setAuth: (user: User, accessToken: string, refreshToken: string, rememberMe?: boolean) => void;
 
   /**
    * Update only the access token after a silent refresh.
@@ -77,10 +102,14 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
 
-      setAuth: (user, accessToken, refreshToken) => {
-        // Persist refresh token in localStorage for the axios interceptor
+      setAuth: (user, accessToken, refreshToken, rememberMe = true) => {
         if (typeof window !== "undefined") {
-          localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+          storeRefreshToken(refreshToken, rememberMe);
+          // Lightweight cookies so Next.js middleware can check auth/role
+          const maxAge = rememberMe ? 604800 : undefined; // 7 days or session
+          const maxAgeStr = maxAge ? `; max-age=${maxAge}` : "";
+          document.cookie = `isAuthenticated=true; path=/; SameSite=Lax${maxAgeStr}`;
+          document.cookie = `userRole=${user.role}; path=/; SameSite=Lax${maxAgeStr}`;
         }
         set({ user, accessToken, isAuthenticated: true, isLoading: false });
       },
@@ -88,9 +117,10 @@ export const useAuthStore = create<AuthState>()(
       setAccessToken: (accessToken) => set({ accessToken }),
 
       logout: () => {
-        // Wipe the refresh token on explicit logout
         if (typeof window !== "undefined") {
-          localStorage.removeItem(REFRESH_TOKEN_KEY);
+          clearRefreshToken();
+          document.cookie = `isAuthenticated=; path=/; max-age=0`;
+          document.cookie = `userRole=; path=/; max-age=0`;
         }
         set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       },

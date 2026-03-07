@@ -33,12 +33,12 @@ export const useAuth = () => {
    * On failure: shows error toast and rethrows for the form to handle.
    */
   const login = useCallback(
-    async (credentials: LoginCredentials, redirectTo?: string) => {
+    async (credentials: LoginCredentials, rememberMe = true, redirectTo?: string) => {
       const toastId = toast.loading("Connexion en cours...");
       try {
         const { accessToken: token, refreshToken, user: authUser } =
           await authApi.login(credentials);
-        setAuth(authUser, token, refreshToken);
+        setAuth(authUser, token, refreshToken, rememberMe);
         toast.success(`Bienvenue, ${authUser.firstName}!`, { id: toastId });
         const destination = redirectTo ?? ROLE_REDIRECT[authUser.role];
         router.push(destination);
@@ -61,7 +61,7 @@ export const useAuth = () => {
       try {
         const { accessToken: token, refreshToken, user: authUser } =
           await authApi.register(credentials);
-        setAuth(authUser, token, refreshToken);
+        setAuth(authUser, token, refreshToken, true); // register always remembers
         toast.success("Compte créé avec succès!", { id: toastId });
         router.push(redirectTo);
       } catch (error: unknown) {

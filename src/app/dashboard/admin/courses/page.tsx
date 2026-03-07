@@ -1,77 +1,116 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { formatPrice } from "@/lib/utils";
-
-// Mock data for courses
-const mockCourses = [
-  {
-    id: "1",
-    title: "Complete React Developer Course",
-    instructor: "John Doe",
-    students: 1234,
-    rating: 4.8,
-    price: 99.99,
-    status: "published",
-    createdAt: "2024-01-15",
-  },
-  {
-    id: "2",
-    title: "Advanced TypeScript Patterns",
-    instructor: "Jane Smith",
-    students: 567,
-    rating: 4.9,
-    price: 79.99,
-    status: "published",
-    createdAt: "2024-01-10",
-  },
-  {
-    id: "3",
-    title: "Next.js 14 Masterclass",
-    instructor: "Bob Johnson",
-    students: 0,
-    rating: 0,
-    price: 129.99,
-    status: "draft",
-    createdAt: "2024-01-20",
-  },
-];
+import { coursesApi } from "@/features/courses/api";
+import type { Course } from "@/features/courses/types";
 
 const statusOptions = [
-  { value: "", label: "All Status" },
-  { value: "published", label: "Published" },
-  { value: "draft", label: "Draft" },
-  { value: "under-review", label: "Under Review" },
+  { value: "", label: "Tous les statuts" },
+  { value: "published", label: "Publié" },
+  { value: "draft", label: "Brouillon" },
 ];
 
 export default function AdminCoursesPage() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const filteredCourses = mockCourses.filter((course) => {
-    const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = !selectedStatus || course.status === selectedStatus;
-    return matchesSearch && matchesStatus;
+  const loadCourses = useCallback(() => {
+    setLoading(true);
+    coursesApi.getCourses({ all: "true" } as never)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res as { data?: Course[] }).data ?? [];
+        setCourses(list);
+      })
+      .catch(() => toast.error("Impossible de charger les cours"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadCourses(); }, [loadCourses]);
+
+  const handleDelete = async (course: Course) => {
+    if (!window.confirm(`Supprimer le cours "${course.title}" ? Cette action est irréversible.`)) return;
+    setDeletingId(course.id);
+    try {
+      await coursesApi.deleteCourse(course.id);
+      setCourses((prev) => prev.filter((c) => c.id !== course.id));
+      toast.success("Cours supprimé");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de la suppression");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleTogglePublish = async (course: Course) => {
+    setTogglingId(course.id);
+    try {
+      const updated = await coursesApi.updateCourse(course.id, { isPublished: !course.isPublished });
+      setCourses((prev) => prev.map((c) => (c.id === course.id ? { ...c, isPublished: updated.isPublished } : c)));
+      toast.success(updated.isPublished ? "Cours publié" : "Cours mis en brouillon");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de la mise à jour");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const filtered = courses.filter((c) => {
+    const matchSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchStatus =
+      !selectedStatus ||
+      (selectedStatus === "published" && c.isPublished) ||
+      (selectedStatus === "draft" && !c.isPublished);
+    return matchSearch && matchStatus;
   });
+
+  const published = courses.filter((c) => c.isPublished).length;
+  const drafts = courses.filter((c) => !c.isPublished).length;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-display-md font-bold text-text-primary">Manage Courses</h1>
-        <p className="text-body-md text-text-secondary mt-1">
-          Review and manage all courses on the platform
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-display-md font-bold text-text-primary">Gestion des cours</h1>
+          <p className="text-body-md text-text-secondary mt-1">
+            Consultez et gérez tous les cours de la plateforme
+          </p>
+        </div>
+        <Link href="/dashboard/instructor/create-course">
+          <Button leftIcon={<span>+</span>}>Nouveau cours</Button>
+        </Link>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Total", value: courses.length },
+          { label: "Publiés", value: published },
+          { label: "Brouillons", value: drafts },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="text-center py-4">
+              <p className="text-display-sm font-bold text-text-primary">{s.value}</p>
+              <p className="text-caption text-text-muted">{s.label}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <Input
-          placeholder="Search courses..."
+          placeholder="Rechercher un cours..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1"
@@ -89,105 +128,81 @@ export default function AdminCoursesPage() {
         />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Total Courses", value: "12,345" },
-          { label: "Published", value: "10,234" },
-          { label: "Under Review", value: "456" },
-          { label: "Draft", value: "1,655" },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="text-center py-4">
-              <p className="text-display-sm font-bold text-text-primary">{stat.value}</p>
-              <p className="text-caption text-text-muted">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Courses Table */}
+      {/* Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-surface-2 border-b border-border">
-                <tr>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Course
-                  </th>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Instructor
-                  </th>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Status
-                  </th>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Students
-                  </th>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Price
-                  </th>
-                  <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredCourses.map((course) => (
-                  <tr key={course.id} className="hover:bg-surface-2/50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-8 rounded bg-surface-3 flex items-center justify-center text-lg">
-                          📚
-                        </div>
-                        <div>
-                          <p className="text-body-sm font-medium text-text-primary">
+            {loading ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-12 rounded-lg bg-surface-2 animate-pulse" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-12 text-text-secondary">
+                {courses.length === 0 ? "Aucun cours pour le moment" : "Aucun cours ne correspond à votre recherche"}
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-surface-2 border-b border-border">
+                  <tr>
+                    <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">Cours</th>
+                    <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">Module</th>
+                    <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">Statut</th>
+                    <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">Leçons</th>
+                    <th className="text-left py-3 px-4 text-body-sm font-medium text-text-secondary">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((course) => (
+                    <tr key={course.id} className="hover:bg-surface-2/50">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-8 rounded bg-surface-3 flex items-center justify-center text-base flex-shrink-0">
+                            📚
+                          </div>
+                          <p className="text-body-sm font-medium text-text-primary line-clamp-1">
                             {course.title}
                           </p>
-                          <p className="text-caption text-text-muted">
-                            Rating: {course.rating > 0 ? course.rating.toFixed(1) : "N/A"}
-                          </p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-body-sm text-text-secondary">
-                      {course.instructor}
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge
-                        variant={
-                          course.status === "published"
-                            ? "success"
-                            : course.status === "draft"
-                            ? "warning"
-                            : "default"
-                        }
-                        size="sm"
-                      >
-                        {course.status}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-body-sm text-text-secondary">
-                      {course.students.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-body-sm text-text-secondary">
-                      {formatPrice(course.price)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm">
-                          View
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-error-600">
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="py-3 px-4 text-body-sm text-text-secondary">
+                        {course.module?.name ?? "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge variant={course.isPublished ? "success" : "warning"} size="sm">
+                          {course.isPublished ? "Publié" : "Brouillon"}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-body-sm text-text-secondary">
+                        {course.totalLessons ?? 0}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            isLoading={togglingId === course.id}
+                            onClick={() => handleTogglePublish(course)}
+                          >
+                            {course.isPublished ? "Dépublier" : "Publier"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-error-500"
+                            isLoading={deletingId === course.id}
+                            onClick={() => handleDelete(course)}
+                          >
+                            Supprimer
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -10,7 +10,7 @@
  *       - Calls POST /auth/refresh with the localStorage refresh token
  *       - On success: updates the store + retries all queued requests
  *       - On failure: calls store.logout() + redirects to /login
- *  3. Unwraps the NestJS ApiResponse envelope { success, data, message? }
+ *  3. Unwraps the NestJS ApiResponse envelope { data, statusCode, timestamp }
  *     so callers receive the inner data directly.
  */
 
@@ -21,7 +21,7 @@ import axios, {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from "axios";
-import { REFRESH_TOKEN_KEY } from "@/store/authStore";
+import { REFRESH_TOKEN_KEY, getRefreshToken, storeRefreshToken } from "@/store/authStore";
 
 // ─── Typed API error ─────────────────────────────────────────────────────────
 
@@ -64,6 +64,24 @@ const processQueue = (error: unknown, token: string | null) => {
   failedQueue = [];
 };
 
+/**
+ * Claim the refresh lock from outside (e.g. AuthHydrator on page load).
+ * While held, any 401 from the interceptor will queue instead of
+ * initiating a concurrent refresh — preventing token rotation conflicts.
+ */
+export const claimRefreshLock = (): void => {
+  isRefreshing = true;
+};
+
+/**
+ * Release the refresh lock and drain the queue.
+ * Call with (null, newToken) on success, or (error, null) on failure.
+ */
+export const releaseRefreshLock = (error: unknown, token: string | null): void => {
+  processQueue(error, token);
+  isRefreshing = false;
+};
+
 // ─── Axios factory ───────────────────────────────────────────────────────────
 
 const createAxiosInstance = (): AxiosInstance => {
@@ -90,13 +108,13 @@ const createAxiosInstance = (): AxiosInstance => {
   // ── RESPONSE: unwrap ApiResponse envelope + handle 401 ────────────────
   instance.interceptors.response.use(
     (response: AxiosResponse) => {
-      // Unwrap { success, data, message? } automatically
+      // Unwrap NestJS envelope { data, statusCode, timestamp }
       const body = response.data;
       if (
         body !== null &&
         typeof body === "object" &&
-        "success" in body &&
-        "data" in body
+        "data" in body &&
+        "statusCode" in body
       ) {
         return { ...response, data: body.data };
       }
@@ -110,7 +128,13 @@ const createAxiosInstance = (): AxiosInstance => {
       if (!originalRequest) return Promise.reject(transformError(error));
 
       // ── Silent token refresh on 401 ──────────────────────────────────
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      // Never intercept 401s from auth endpoints — those are legitimate failures
+      // (wrong password, expired invite, etc.) and should propagate to the caller.
+      const isAuthEndpoint = ["/auth/login", "/auth/register"].some(
+        (path) => originalRequest.url?.includes(path)
+      );
+
+      if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
         originalRequest._retry = true;
 
         if (isRefreshing) {
@@ -131,12 +155,13 @@ const createAxiosInstance = (): AxiosInstance => {
         isRefreshing = true;
 
         try {
-          const refreshToken =
-            typeof window !== "undefined"
-              ? localStorage.getItem(REFRESH_TOKEN_KEY)
-              : null;
+          const refreshToken = getRefreshToken();
 
           if (!refreshToken) throw new Error("No refresh token");
+
+          // Remember which storage held the token so rotation goes to same storage
+          const rememberMe =
+            typeof window !== "undefined" && !!localStorage.getItem(REFRESH_TOKEN_KEY);
 
           // Call refresh — this bypasses our instance to avoid a loop
           const refreshResponse = await axios.post(
@@ -155,9 +180,7 @@ const createAxiosInstance = (): AxiosInstance => {
           const { useAuthStore } = require("@/store/authStore");
           useAuthStore.getState().setAccessToken(newAccessToken);
 
-          if (typeof window !== "undefined") {
-            localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
-          }
+          storeRefreshToken(newRefreshToken, rememberMe);
 
           if (originalRequest.headers) {
             (originalRequest.headers as Record<string, string>).Authorization =

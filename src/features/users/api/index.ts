@@ -33,10 +33,10 @@ export const usersApi = {
 
   // Student endpoints
   getStudentStats: (): Promise<StudentStats> =>
-    api.get(`${USERS_BASE}/me/stats`),
+    api.get(`/dashboard/student`),
 
   getEnrollments: (): Promise<Enrollment[]> =>
-    api.get(`${USERS_BASE}/me/enrollments`),
+    Promise.resolve([]),
 
   getWishlist: (): Promise<Course[]> =>
     api.get(`${USERS_BASE}/me/wishlist`),
@@ -50,12 +50,12 @@ export const usersApi = {
   getCertificates: (): Promise<Certificate[]> =>
     api.get(`${USERS_BASE}/me/certificates`),
 
-  // Instructor endpoints
+  // Instructor endpoints — uses dashboard/admin which includes all stats
   getInstructorStats: (): Promise<InstructorStats> =>
-    api.get(`${USERS_BASE}/me/instructor-stats`),
+    api.get(`/dashboard/admin`),
 
   getInstructorCourses: (): Promise<Course[]> =>
-    api.get(`${USERS_BASE}/me/courses`),
+    api.get(`/courses`),
 
   // Admin endpoints
   getAllUsers: (params?: { page?: number; limit?: number; role?: string; search?: string }) =>

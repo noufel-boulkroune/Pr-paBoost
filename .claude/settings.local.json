@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sv http://localhost:3000/api/v1/categories)",
+      "Read(//d/development/projucts/med/prep-backend/**)",
+      "Bash(timeout 30 node_modules/.bin/nest start)",
+      "Bash(timeout 45 node_modules/.bin/nest start)",
+      "Bash(ss -tlnp)",
+      "Bash(curl -s --max-time 3 http://localhost:3000/api/v1/categories)",
+      "Bash(curl -s http://localhost:54112/api/v1/categories)",
+      "Bash(curl -s http://localhost:54112/api/v1/teachers)",
+      "Bash(curl -s http://localhost:54112/api/v1/auth/login -X POST -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"test@test.com\"\",\"\"password\"\":\"\"test123\"\"}')",
+      "Bash(curl -s http://localhost:3000/api/v1/auth/login -X POST -H \"Content-Type: application/json\" -d '{\"\"email\"\":\"\"admin@prepmed.dz\"\",\"\"password\"\":\"\"Admin123!\"\"}')",
+      "Bash(curl -s http://localhost:3000/api/v1/auth/login -X POST -H \"Content-Type: application/json\" --data-raw '{\"\"email\"\":\"\"admin@prepmed.dz\"\",\"\"password\"\":\"\"Admin123!\"\"}')",
+      "Bash(ls \"d:/development/projucts/med/coursestack/src/app/dashboard/admin/\"*/)",
+      "Bash(node_modules/.bin/nest build)",
+      "Bash(xargs grep -l \"courses\\\\|Course\")",
+      "Bash(npm install next-themes --save)"
+    ]
+  }
+}

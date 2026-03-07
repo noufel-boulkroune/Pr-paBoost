@@ -99,6 +99,7 @@ export function TabTrigger({
 
   return (
     <button
+      type="button"
       onClick={() => !disabled && setActiveTab(value)}
       disabled={disabled}
       className={cn(
